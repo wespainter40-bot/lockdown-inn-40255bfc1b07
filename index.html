@@ -1,0 +1,565 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>Lockdown Inn</title>
+<link rel="manifest" href="manifest.webmanifest"><meta name="theme-color" content="#0b0906"><link rel="icon" href="icon-192.png"><link rel="apple-touch-icon" href="icon-192.png">
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:#000;overflow:hidden;font-family:Georgia,serif;color:#e8e2d4;-webkit-user-select:none;user-select:none}
+canvas{display:block;touch-action:none}
+.ov{position:fixed;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;background:#000d;text-align:center;padding:20px;z-index:30}
+.ov.on{display:flex}
+h1{font-size:46px;letter-spacing:6px;margin:0 0 6px;color:#e9d8a6}
+h2{margin:0 0 10px;color:#e9d8a6}
+p{max-width:560px;line-height:1.5;margin:6px 0}
+button{background:#2a2622;color:#eee;border:1px solid #7a6e55;border-radius:8px;padding:12px 18px;font-size:16px;font-family:inherit;margin:5px;cursor:pointer}
+button:active{background:#4a4234}
+button.big{font-size:20px;padding:14px 30px;background:#5a3a1a}
+#hud{position:fixed;top:0;left:0;right:0;display:none;justify-content:space-between;align-items:flex-start;padding:10px 14px;pointer-events:none;z-index:10}
+#hud>*{pointer-events:auto}
+#clock{font-size:22px;text-shadow:0 0 6px #000}
+#sanwrap{width:220px}
+#sanbar{height:14px;background:#1a1a1a;border:1px solid #6b6048;border-radius:7px;overflow:hidden}
+#sanfill{height:100%;width:100%;background:#7fbf7f;transition:width .4s,background .4s}
+#sanlabel{font-size:12px;opacity:.8;text-align:center}
+#bar{position:fixed;left:0;right:0;bottom:0;display:none;gap:6px;justify-content:center;flex-wrap:wrap;padding:10px;background:linear-gradient(transparent,#000c);z-index:10}
+#walk{position:fixed;left:12px;bottom:90px;display:none;grid-template-columns:repeat(3,56px);gap:4px;z-index:12}
+#walk button{margin:0;padding:12px 0;font-size:20px}
+#toast{position:fixed;left:50%;top:70px;transform:translateX(-50%);max-width:80%;background:#000c;border:1px solid #8a7b57;border-radius:8px;padding:10px 16px;font-size:17px;text-align:center;display:none;z-index:20}
+#cap{position:fixed;left:0;right:0;bottom:86px;text-align:center;font-style:italic;font-size:20px;text-shadow:0 0 6px #000;display:none;z-index:10}
+#vig{position:fixed;inset:0;pointer-events:none;z-index:5;background:radial-gradient(ellipse at center,transparent 45%,#000b 100%)}
+#peepmask{position:fixed;inset:0;pointer-events:none;z-index:6;display:none;background:radial-gradient(circle at center,transparent 0,transparent 32vmin,#000 33vmin)}
+#lap{position:fixed;inset:0;display:none;z-index:7;background:transparent;padding:70px 3vw 90px;gap:12px;flex-direction:column;align-items:stretch;justify-content:center}
+#lap.on{display:flex}
+#feeds{display:flex;gap:10px;height:60%}
+.feed{flex:1;position:relative;border:2px solid #345;box-shadow:0 0 12px #0af3 inset;min-width:0}
+.feed span{position:absolute;left:6px;top:4px;font:12px monospace;color:#9fe;text-shadow:0 0 3px #000}
+.feed::after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(transparent 0 2px,#0004 2px 3px);pointer-events:none}
+#laptitle{text-align:center;font:14px monospace;color:#7ac}
+#scare{position:fixed;inset:0;display:none;z-index:40;background:#300}
+#scare canvas{width:100%;height:100%}
+#scare.on{display:block;animation:shake .08s infinite}
+@keyframes shake{0%{transform:translate(0,0)}25%{transform:translate(-12px,6px)}50%{transform:translate(10px,-8px)}75%{transform:translate(-8px,-6px)}}
+.tog{border-color:#a55}
+.tog.on{border-color:#5a5;background:#243}
+</style></head><body>
+<div id="vig"></div>
+<div id="peepmask"></div>
+<div id="lap"><div id="nosig" style="display:none;position:absolute;inset:70px 3vw 90px;z-index:3;background:#000e;align-items:center;justify-content:center;font:28px monospace;color:#c55;text-align:center">NO SIGNAL<br>Reboot the laptop</div><div id="laptitle">HOTEL SECURITY. THREE CAMERAS.</div><div id="feeds"><div class="feed" id="f0"><span>CAM 1 LOBBY</span></div><div class="feed" id="f1"><span>CAM 2 STAIRS</span></div><div class="feed" id="f2"><span>CAM 3 YOUR DOOR</span></div></div></div>
+<div id="hud"><div><div id="clock">11:00 PM</div><div id="inv" style="font-size:14px;opacity:.9;text-shadow:0 0 5px #000;margin-top:4px"></div></div><div id="sanwrap"><div id="sanbar"><div id="sanfill"></div></div><div id="sanlabel">Sanity 100</div></div><button id="pausebtn">Pause</button></div>
+<div id="walk"><span></span><button data-m="f,1">&#9650;</button><span></span><button data-m="s,-1">&#9664;</button><button data-m="f,-1">&#9660;</button><button data-m="s,1">&#9654;</button></div>
+<div id="toast"></div><div id="cap"></div>
+<div id="bar">
+<button id="bRoom">Room</button><button id="bPeep">Peephole</button><button id="bLap">Laptop</button>
+<button id="bOpen" style="display:none;background:#1c4a24">Open the door</button>
+<button id="bKeep" style="display:none;background:#5a1c1c">Keep it locked</button>
+<button id="bCurt" style="display:none;background:#2a3a5a">Close curtains</button>
+<button id="bAct" style="display:none;background:#2a3a5a"></button>
+<button id="bEsc" style="display:none;background:#4a2a2a">Climb out the window</button>
+<button id="bPill" style="display:none;background:#2a4a3a">Take a pill</button>
+<button id="bSpray" style="display:none;background:#3a4a2a">Use bug spray</button>
+<button id="bSleep" style="display:none">Go to sleep</button>
+</div>
+<div id="hideov" style="position:fixed;inset:0;display:none;z-index:6;pointer-events:none;background:radial-gradient(ellipse at center,#0006 0,#000e 75%)"></div>
+<div class="ov" id="mini"><h2>Rebooting the laptop</h2><p id="mscore">Stop the marker inside the green zone. Three times.</p><div id="mbar" style="position:relative;width:min(80vw,520px);height:36px;background:#222;border:2px solid #7a6e55;border-radius:6px;margin:14px 0"><div id="mzone" style="position:absolute;top:0;bottom:0;background:#2e8b3a"></div><div id="mmark" style="position:absolute;top:-4px;bottom:-4px;width:6px;background:#fff"></div></div><button class="big" id="mstop">STOP</button><button id="mquit">Back</button></div>
+<div id="scare"><canvas id="scarec" width="480" height="480"></canvas></div>
+
+<div class="ov on" id="title">
+<h1>LOCKDOWN INN</h1><p>Room 9. Strangers knock all night. Some are people. Some are not.</p>
+<p id="tbest"></p>
+<button class="big" id="startbtn">Start Night 1</button>
+<button class="tog" id="scaryTitle">Scary Mode: OFF</button>
+<button id="rulesTitle">Read the rules card</button>
+</div>
+<div class="ov" id="rules"><h2>Rules card, Room 9</h2>
+<p>1. Anyone with a tell is not a person. Keep the door locked.</p>
+<p>2. Real people show up on all three cameras and the peephole, and they have no tells. Let them in.</p>
+<p id="rule3"></p>
+<p>4. Letting a monster in costs 25 sanity. Locking out a real person costs 10. Pizza helps.</p>
+<p>5. Do not sleep alone. Have a real person in the room at 6 AM.</p>
+<p>Note: some real people leave you something useful, like a cat, bug spray, sanity pills or a key. What you carry shows at the top left.</p>
+<div id="rulesx"></div>
+<button class="big" id="rulesClose">Back</button></div>
+<div class="ov" id="pause"><h2>Paused</h2>
+<button class="big" id="resume">Resume</button>
+<button class="tog" id="scaryPause">Scary Mode: OFF</button>
+<button class="tog" id="sndPause">Sound: ON</button>
+<button id="rulesPause">Rules card</button>
+<button id="restart">Restart night</button></div>
+<div class="ov" id="end"><h2 id="endh"></h2><p id="endp"></p>
+<div id="doors" style="display:none"><button id="bDoorA" style="background:#6a1c1c">The red staff door</button><button id="bDoorB">The plain back door</button><button id="bDoorC">Wait for the day shift</button></div>
+<button class="big" id="again">Play again</button></div>
+
+<script type="importmap">{"imports":{"three":"./lib/three.module.js","three/addons/":"./lib/addons/"}}</script>
+<script type="module">
+import * as THREE from 'three';
+import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+const $=id=>document.getElementById(id);
+const SAVE=JSON.parse(localStorage.getItem('lockdown')||'{}');
+if(new URLSearchParams(location.search).get('reset')){delete SAVE.nights;delete SAVE.endings;delete SAVE.key;localStorage.setItem('lockdown',JSON.stringify(SAVE))}
+let scary=!!SAVE.scary;const SQ=new URLSearchParams(location.search).get('scary');if(SQ!==null)scary=SQ==='1';
+const persist=()=>localStorage.setItem('lockdown',JSON.stringify(SAVE));
+
+/* ---------- renderer ---------- */
+const r=new THREE.WebGLRenderer({antialias:true});
+r.setPixelRatio(Math.min(devicePixelRatio,2));r.setSize(innerWidth,innerHeight);
+r.toneMapping=THREE.ACESFilmicToneMapping;r.shadowMap.enabled=true;r.autoClear=false;
+document.body.insertBefore(r.domElement,document.body.firstChild);
+
+/* ---------- audio ---------- */
+let AC=null,OUT=null,MUF=null,HID=null,AMB=null,MASTER=null,NB=null,BR=null;
+const SND={nextBeat:0,lights:false,hush:0,stepT:0};
+function ac(){if(!AC){AC=new (window.AudioContext||window.webkitAudioContext)();try{buildAudio()}catch(e){}}if(AC.state==='suspended')AC.resume();return AC}
+function mkBuf(brown){const n=AC.sampleRate*3,b=AC.createBuffer(1,n,AC.sampleRate),d=b.getChannelData(0);let l=0;
+ for(let i=0;i<n;i++){const w=Math.random()*2-1;if(brown){l=(l+.02*w)/1.02;d[i]=l*3.5}else d[i]=w}return b}
+function buildAudio(){const a=AC;NB=mkBuf(0);BR=mkBuf(1);
+ OUT=a.createGain();MUF=a.createBiquadFilter();MUF.type='lowpass';MUF.frequency.value=18000;HID=a.createBiquadFilter();HID.type='lowpass';HID.frequency.value=18000;
+ const comp=a.createDynamicsCompressor();MASTER=a.createGain();MASTER.gain.value=SAVE.mute?0:1;
+ OUT.connect(MUF);MUF.connect(HID);HID.connect(comp);comp.connect(MASTER);MASTER.connect(a.destination);
+ AMB=a.createGain();AMB.connect(OUT);
+ const loop=(buf,ft,f,g,q)=>{const sr=a.createBufferSource();sr.buffer=buf;sr.loop=true;const fl=a.createBiquadFilter();fl.type=ft;fl.frequency.value=f;if(q)fl.Q.value=q;const gn=a.createGain();gn.gain.value=g;sr.connect(fl);fl.connect(gn);gn.connect(AMB);sr.start(0,Math.random()*2);return {fl,gn}};
+ SND.room=loop(BR,'lowpass',240,.1);
+ SND.wind=loop(NB,'bandpass',420,0,.7);
+ const wl=a.createOscillator(),wg=a.createGain();wl.frequency.value=.13;wg.gain.value=220;wl.connect(wg);wg.connect(SND.wind.fl.frequency);wl.start();
+ SND.hum=a.createGain();SND.hum.gain.value=.01;
+ [[120,'sine',1],[180,'triangle',.4],[60,'sine',.6]].forEach(([f,t,m])=>{const o=a.createOscillator(),g=a.createGain();o.type=t;o.frequency.value=f;g.gain.value=m;o.connect(g);g.connect(SND.hum);o.start()});SND.hum.connect(AMB);
+ const bo=a.createOscillator(),bf=a.createBiquadFilter();bo.type='sawtooth';bo.frequency.value=100;bf.type='bandpass';bf.frequency.value=1900;bf.Q.value=3;SND.buzz=a.createGain();SND.buzz.gain.value=.003;bo.connect(bf);bf.connect(SND.buzz);SND.buzz.connect(AMB);bo.start();
+ SND.drone=a.createGain();SND.drone.gain.value=0;[62,64.6].forEach(f=>{const o=a.createOscillator();o.type='sine';o.frequency.value=f;o.connect(SND.drone);o.start()});SND.drone.connect(AMB);
+ const to=a.createOscillator(),tf=a.createBiquadFilter();to.type='sawtooth';to.frequency.value=46;tf.type='lowpass';tf.frequency.value=180;SND.ten=a.createGain();SND.ten.gain.value=0;to.connect(tf);tf.connect(SND.ten);SND.ten.connect(OUT);to.start();SND.tenF=to}
+function tone(f,d,type='sine',v=.2,slide=0){try{const a=ac(),o=a.createOscillator(),g=a.createGain();o.type=type;o.frequency.value=f;
+ if(slide)o.frequency.exponentialRampToValueAtTime(Math.max(20,f+slide),a.currentTime+d);
+ g.gain.value=v;g.gain.exponentialRampToValueAtTime(.0001,a.currentTime+d);o.connect(g);g.connect(OUT);o.start();o.stop(a.currentTime+d)}catch(e){}}
+function nz(ft,f,d,v,f2=0,q=1,delay=0){try{const a=ac(),t=a.currentTime+delay,sr=a.createBufferSource();sr.buffer=NB;const fl=a.createBiquadFilter();fl.type=ft;fl.frequency.setValueAtTime(f,t);if(f2)fl.frequency.exponentialRampToValueAtTime(f2,t+d);fl.Q.value=q;
+ const g=a.createGain();g.gain.setValueAtTime(.0001,t);g.gain.linearRampToValueAtTime(v,t+.006);g.gain.exponentialRampToValueAtTime(.0001,t+d);sr.connect(fl);fl.connect(g);g.connect(OUT);sr.start(t,Math.random()*2);sr.stop(t+d+.02)}catch(e){}}
+function muffle(d=1.6,f0=380){if(!MUF)return;const t=AC.currentTime;MUF.frequency.cancelScheduledValues(t);MUF.frequency.setValueAtTime(f0,t);MUF.frequency.exponentialRampToValueAtTime(18000,t+d)}
+function hush(d){if(!AMB)return;const t=AC.currentTime;SND.hush=t+d;AMB.gain.cancelScheduledValues(t);AMB.gain.setTargetAtTime(0,t,.06);AMB.gain.setTargetAtTime(1,t+d,.35)}
+function hit(){if(!AC)return;if(scary){muffle(1.9,320);nz('lowpass',200,.5,.6,60);tone(48,.7,'sine',.6,-10);tone(3600,1.8,'sine',.02)}else{muffle(.7,1500);tone(180,.25,'sine',.3,-120)}}
+function creak(d=.9,v=.09){try{const a=ac(),t=a.currentTime,o=a.createOscillator(),f=a.createBiquadFilter(),g=a.createGain();o.type='sawtooth';o.frequency.setValueAtTime(150,t);for(let i=1;i<8;i++)o.frequency.setValueAtTime(110+Math.random()*120,t+i*d/8);
+ f.type='bandpass';f.frequency.value=700;f.Q.value=7;g.gain.setValueAtTime(.0001,t);g.gain.linearRampToValueAtTime(v,t+.1);g.gain.linearRampToValueAtTime(v*.7,t+d*.7);g.gain.exponentialRampToValueAtTime(.0001,t+d);o.connect(f);f.connect(g);g.connect(OUT);o.start(t);o.stop(t+d+.05)}catch(e){}}
+function step(v){nz('lowpass',scary?260:420,.1,v);tone(scary?68:120,.12,'sine',v*.9,-25)}
+function bolt(){tone(1200,.03,'square',.12);nz('bandpass',3000,.05,.2);setTimeout(()=>tone(700,.04,'square',.1),90)}
+function shatter(){nz('highpass',3000,.9,.5);nz('lowpass',500,.3,.5);for(let i=0;i<8;i++)setTimeout(()=>tone(2500+Math.random()*3000,.15,'triangle',.07),i*70+Math.random()*60)}
+function birds(){for(let i=0;i<7;i++)setTimeout(()=>{const f=2600+Math.random()*1400;tone(f,.09,'sine',.07,f*.5);setTimeout(()=>tone(f*1.1,.07,'sine',.06,f*.4),110)},Math.random()*3500)}
+function knock(){const n=scary?.7:.45;for(let i=0;i<3;i++)setTimeout(()=>{tone(scary?85:110,.16,'sine',n,-30);nz('lowpass',scary?400:700,.07,n*.8)},i*(scary?190:170)+(i===2?40:0))}
+function stinger(){tone(220,1,'sawtooth',.35,-170);tone(1800,.35,'square',.25,-1600);nz('bandpass',2500,.6,.5,300,.8);nz('lowpass',150,.9,.9,40);tone(55,1.2,'sine',.7,-20)}
+function boing(){tone(260,.45,'sine',.35,420)}
+function pling(){tone(880,.25,'triangle',.25);setTimeout(()=>tone(1320,.3,'triangle',.2),120)}
+function scratch(){if(scary){for(let i=0;i<3;i++)nz('bandpass',3800-i*500,.28,.16,1800,2.5,i*.12)}else{tone(520,.05,'sine',.2);setTimeout(()=>tone(520,.05,'sine',.2),160)}}
+function beat(v){tone(78,.13,'sine',v,-30);nz('lowpass',180,.06,v*.7);setTimeout(()=>{tone(66,.16,'sine',v*.75,-25);nz('lowpass',150,.06,v*.5)},170)}
+function buzzDip(){if(!SND.buzz)return;const x=SND.buzz.gain,t=AC.currentTime;x.cancelScheduledValues(t);x.setValueAtTime(0,t);x.setTargetAtTime(.0035,t+.08,.02);tone(2400,.03,'square',.04)}
+function sndTick(){if(!AC||AC.state!=='running'||!SND.room)return;const t=AC.currentTime,live=!!(G&&started&&!G.over),san=live?G.sanity:100,lo=Math.max(0,Math.min(1,(60-san)/60)),T=(p,v,k=.25)=>p.setTargetAtTime(v,t,k);
+ T(SND.drone.gain,scary?(live?.012+.05*lo+(SND.lights?.015:0):.015):0);
+ T(SND.wind.gn.gain,scary?.025:0);T(SND.room.gn.gain,scary?.08:.05);
+ T(SND.hum.gain,SND.lights?0:(scary?.012:.008));T(SND.buzz.gain,SND.lights?0:(scary?.0035:.0025));
+ let ten=0,tf=46;
+ if(live&&G.ev){const e=G.ev;if(e.type==='shade'){ten=.04+.12*e.a;tf=44+30*e.a}else if(e.type==='door'&&G.hide)ten=.06;else if(e.type==='window')ten=.03;else if(e.type==='crawl')ten=.025}
+ if(t<SND.hush||!scary)ten=0;T(SND.ten.gain,ten);SND.tenF.frequency.setTargetAtTime(tf,t,.3);
+ T(HID.frequency,live&&G.hide?900:18000,.12);
+ if(scary&&live&&san<55&&t>SND.nextBeat&&t>=SND.hush){SND.nextBeat=t+60/(60+(55-san)*1.6);beat(.18+.5*lo)}}
+function sndEv(type,on){if(!AC)return;
+ if(type==='lights'){SND.lights=on;if(on){nz('lowpass',300,.4,.4,80);if(scary)hush(.8)}else{nz('bandpass',2500,.05,.3);tone(180,.1,'square',.15);tone(900,.2,'sine',.05)}}
+ else if(on&&scary&&type==='window')hush(.5)}
+function evSound(e){if(!AC||AC.state!=='running')return;const s=e.snd||(e.snd={}),age=G.t-e.start,tm=G.t;
+ const every=(k,gap,fn)=>{if(tm-(s[k]===undefined?-99:s[k])>gap){s[k]=tm;fn()}};
+ switch(e.type){
+ case 'lights':if(scary)every('c',3+Math.random()*3,()=>creak(.6,.05));break;
+ case 'vent':if(age>=1.5&&!s.sp){s.sp=1;nz('lowpass',700,.3,.6,150);tone(180,.25,'sine',.35,-120)}
+  else if(age<1.5)every('w',.4,()=>tone(900-age*300,.06,'sine',.08,-400));
+  if(age>1.5&&age<=5.5)every('d',1.3,()=>tone(scary?700:900,.07,'sine',.12,-500));
+  if(age>5.5)every('q',.34,()=>{tone(100+Math.random()*50,.12,'sine',scary?.22:.15,-40);nz('bandpass',scary?500:900,.1,.15)});break;
+ case 'laptop':every('b',1.6,()=>{const f=scary?420:700;tone(f,.09,'square',.05);setTimeout(()=>tone(f,.09,'square',.05),150)});break;
+ case 'shade':every('br',Math.max(.9,2.6-e.a*1.8),()=>nz('bandpass',700,.7,.05+.1*e.a,350,1.5));break;
+ case 'door':if(age>9&&age<18&&G.hide)every('f',.75,()=>step(.5));break;
+ case 'crawl':every('k',.1+Math.random()*.3,()=>{const n=2+(Math.random()*3|0);for(let i=0;i<n;i++)nz('highpass',4500,.025,scary?.1:.05,0,1,i*.035)});break}}
+function finishSound(win){if(!AC)return;if(win){birds();pling()}else{tone(110,1.6,'triangle',.25,-60);if(scary)muffle(2.5,250)}}
+function flipSound(){SAVE.mute=!SAVE.mute;persist();if(MASTER)MASTER.gain.value=SAVE.mute?0:1;$('sndPause').textContent='Sound: '+(SAVE.mute?'OFF':'ON')}
+const VOICES={courier:{g:'m',p:1.0,r:1.08},neighbor:{g:'f',p:.85,r:.95},worker:{g:'m',p:.55,r:.88},gamer:{g:'m',p:1.5,r:1.2},puffer:{g:'f',p:1.8,r:1.1},catlady:{g:'f',p:1.2,r:.95},clerk:{g:'m',p:.8,r:.9},traveler:{g:'m',p:1.1,r:1.1},exterminator:{g:'m',p:.7,r:1.0}};
+function pickVoice(g){const vs=speechSynthesis.getVoices().filter(v=>/^en/i.test(v.lang));const fem=/zira|aria|jenny|female|samantha|susan|hazel|google us english/i,mal=/david|mark|guy|male|george|ryan|daniel/i;const m=vs.filter(v=>g==='f'?fem.test(v.name)&&!/\bmale\b/i.test(v.name):mal.test(v.name));return m[0]||null}
+let voiceAudio=null;
+function stopVoice(){if(voiceAudio){try{voiceAudio.pause()}catch(e){}voiceAudio=null}if('speechSynthesis' in window)speechSynthesis.cancel()}
+function say(text,low,role){stopVoice();if(role&&VOICES[role]){const a=new Audio('assets/voices/'+role+'.mp3');a.volume=SAVE.mute?0:.95;if(low){a.preservesPitch=false;a.playbackRate=.88}a.onerror=()=>sayFallback(text,low,role);voiceAudio=a;a.play().catch(()=>sayFallback(text,low,role));return}sayFallback(text,low,role)}
+function sayFallback(text,low,role){if(!('speechSynthesis' in window))return;try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(text),c=VOICES[role]||{g:'m',p:1,r:1};const v=pickVoice(c.g);if(v)u.voice=v;u.pitch=low?0:c.p;u.rate=low?.55:c.r;u.volume=SAVE.mute?0:.9;speechSynthesis.speak(u)}catch(e){}}
+
+/* ---------- room scene ---------- */
+const room=new THREE.Scene();room.background=new THREE.Color(0x050608);
+const rcam=new THREE.PerspectiveCamera(72,innerWidth/innerHeight,0.05,60);
+const rAmb=new THREE.AmbientLight(0x30343c,.45);room.add(rAmb);
+const rLights=[];
+function pl(x,y,z,c,i,sh){const l=new THREE.PointLight(c,i,9,1.6);l.position.set(x,y,z);if(sh){l.castShadow=true;l.shadow.bias=-0.0008;l.shadow.normalBias=0.04;l.shadow.mapSize.set(1024,1024)}room.add(l);rLights.push(l);return l}
+pl(0,2.3,-3,0xffd9a0,4,true);pl(1.98,.95,-2.25,0xffa550,2.5);pl(1.98,.95,-4.65,0xffa550,2.5);
+const base=[4,2.5,2.5];
+rcam.position.set(-.2,1.55,-1.3);let yaw=0,pitch=0;
+new GLTFLoader().load('assets/hotel_room.glb',g=>{
+ g.scene.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true}});room.add(g.scene);
+ curtClosed=g.scene.getObjectByName('curtains_closed');curtOpen=g.scene.getObjectByName('curtains_open');if(curtClosed)curtClosed.visible=false});
+let curtClosed=null,curtOpen=null;
+function setCurtains(closed){if(curtClosed)curtClosed.visible=closed;if(curtOpen)curtOpen.visible=!closed}
+function makeWatcher(isScary){
+ const g=new THREE.Group(),M=(c)=>new THREE.MeshBasicMaterial({color:c});
+ const head=new THREE.Mesh(new THREE.SphereGeometry(1,24,18),M(isScary?0xb9b5aa:0xf4f4f8));head.scale.set(isScary?.26:.34,isScary?.42:.34,.1);g.add(head);
+ const eyeC=isScary?0x000000:0x111118;
+ [-1,1].forEach(s=>{const e=new THREE.Mesh(new THREE.SphereGeometry(1,16,12),M(eyeC));e.scale.set(isScary?.07:.06,isScary?.11:.09,.03);e.position.set(s*(isScary?.1:.11),isScary?.08:.04,.1);g.add(e);
+  if(!isScary){const h=new THREE.Mesh(new THREE.SphereGeometry(1,8,8),M(0xffffff));h.scale.set(.02,.02,.01);h.position.set(s*.11+.02,.08,.135);g.add(h)}});
+ const mo=new THREE.Mesh(new THREE.SphereGeometry(1,16,12),M(isScary?0x000000:0x333344));mo.scale.set(isScary?.08:.05,isScary?.16:.05,.03);mo.position.set(0,isScary?-.17:-.1,.1);g.add(mo);
+ g.position.set(0,1.55,-5.86);return g}
+
+/* ---------- hall scene ---------- */
+const hall=new THREE.Scene();hall.background=new THREE.Color(0x040404);hall.fog=new THREE.Fog(0x040404,8,34);
+hall.add(new THREE.AmbientLight(0x4a5560,.9));
+const hm=c=>new THREE.MeshStandardMaterial({color:c,roughness:.9});
+function hb(w,h,d,x,y,z,c){const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),hm(c));m.position.set(x,y,z);hall.add(m);return m}
+hb(4.4,.1,9,0,-.05,-4.5,0x3a1f1f);                       // hallway floor
+hb(.1,3,9,-2.25,1.5,-4.5,0x6e6244);hb(.1,3,9,2.25,1.5,-4.5,0x6e6244);hb(4.4,.1,9,0,3.05,-4.5,0x555248);
+hb(4.6,3,.1,0,1.5,.05,0x6e6244);                          // door wall
+const dm=hb(.95,2.1,.06,0,1.05,-.02,0x7a4a26);
+hb(.14,.1,.02,0,1.55,-.07,0xc9b25a);                      // room number plate
+for(let i=0;i<8;i++){const top=-1.6+(i+1)*.2;hb(4.4,top+2.6,1,0,(top-2.6)/2,-17+i+.5,0x4a3a2a)}
+hb(.1,6,8,-2.25,.5,-13,0x6e6244);hb(.1,6,8,2.25,.5,-13,0x6e6244);hb(4.4,.1,8,0,3.05,-13,0x555248);
+hb(10,.1,10,0,-1.65,-22,0x2f2a26);hb(.1,5,10,-5,.9,-22,0x5a5240);hb(.1,5,10,5,.9,-22,0x5a5240);hb(10,5,.1,0,.9,-27,0x5a5240);hb(10,.1,10,0,1.4,-22,0x4a4840);
+hb(2.6,1,.8,-2.5,-1.1,-25.6,0x4a2c14);hb(.5,.5,.5,3.6,-1.4,-20,0x2c4a2c);
+const hl1=new THREE.PointLight(0xbfd8c0,6,14,1.6);hl1.position.set(0,2.7,-4);hall.add(hl1);
+const hl0=new THREE.PointLight(0xffe8c0,7,7,1.5);hl0.position.set(0,2.5,-1.8);hall.add(hl0);
+const hl2=new THREE.PointLight(0xffe2b0,5,14,1.6);hl2.position.set(0,2.4,-12);hall.add(hl2);
+const hl3=new THREE.PointLight(0xffd2a0,6,16,1.6);hl3.position.set(0,.9,-22);hall.add(hl3);
+const cams=[0,1,2].map(()=>new THREE.PerspectiveCamera(65,1.6,.1,60));
+cams[0].position.set(4.4,.6,-18);cams[0].lookAt(-.5,-.8,-23.5);
+cams[1].position.set(1.9,2.5,-9.2);cams[1].lookAt(0,-.4,-15);
+cams[2].position.set(1.9,2.6,-.4);cams[2].lookAt(0,.9,-1.8);
+const peep=new THREE.PerspectiveCamera(105,innerWidth/innerHeight,.05,60);peep.position.set(0,1.6,-.12);peep.lookAt(0,1.5,-6);
+
+/* ---------- figures ---------- */
+const TELLS={tilt:'Tilt: the neck was bent back toward the ceiling.',hollow:'Hollow: you could see right through the body on the camera.',hush:'Hush: the voice dropped low and wrong.',reacher:'Reacher: the arms were far too long.',twin:'Twin: a second body was slumped beside them.',jitter:'Jitter: the arms and legs twitched and flailed.',absent:'Absent: they showed on the peephole but not on the cameras.'};
+const ROLEFILES={courier:'assets/person_courier.glb',neighbor:'assets/person_neighbor.glb',worker:'assets/person_worker.glb',gamer:'assets/person_gamer.glb',puffer:'assets/person_puffer.glb'};
+const ROLEX={catlady:{base:'neighbor',tint:{top:0x7a3a8a,topdark:0x4a2358,pants:0x3a3a40,hair:0xd8d8d8},cat:true},
+ clerk:{base:'worker',tint:{vest:0x701828,hat:0x701828,top:0x1a1a22,topdark:0x14141a},hide:['toolbox']},
+ traveler:{base:'gamer',tint:{top:0x3a7a5a,topdark:0x2a5a42,hair:0x6a3a1a}},
+ exterminator:{base:'worker',tint:{vest:0x2f7d32,hat:0x2f7d32}}};
+const PEOPLE={};
+const peopleReady=Promise.all(Object.entries(ROLEFILES).map(([k,f])=>new Promise((res,rej)=>new GLTFLoader().load(f,g=>{PEOPLE[k]=g.scene;res()},undefined,rej))));
+function makeCat(sc){const g=new THREE.Group(),c=sc?0x1a1a1a:0xe8943a;g.add(sph(c,.17,.12,.26,0,0,0));g.add(sph(c,.12,.11,.12,0,.08,.26));
+ g.add(sph(c,.04,.07,.04,-.07,.2,.26));g.add(sph(c,.04,.07,.04,.07,.2,.26));g.add(sph(c,.04,.04,.2,0,.02,-.3));
+ if(sc){g.add(sph(0xffe14a,.025,.025,.02,-.05,.1,.37));g.add(sph(0xffe14a,.025,.025,.02,.05,.1,.37))}return g}
+function makeFigure(role,tell,isScary){
+ const rx=ROLEX[role],g=new THREE.Group(),mats=[],body=PEOPLE[rx?rx.base:role].clone(true);
+ body.traverse(o=>{if(o.isMesh){o.material=o.material.clone();const m=o.material;m.transparent=true;
+  if(rx){if(rx.tint&&rx.tint[m.name]!==undefined)m.color.set(rx.tint[m.name]);if(rx.hide&&rx.hide.includes(m.name))o.visible=false}
+  const keep=m.name==='glow'||m.name==='dark'||m.name==='tooth';
+  if(isScary&&!keep)m.color.lerp(new THREE.Color(0xa9a398),.8);
+  if(isScary&&m.name==='glow'){m.emissive.set(0xffffff);m.emissiveIntensity=1.5}
+  else m.emissive.copy(m.color).multiplyScalar(isScary?.15:.3);
+  mats.push(m)}});
+ g.add(body);
+ if(rx&&rx.cat&&!tell){const c=makeCat(isScary);c.position.set(.36,.95,.28);g.add(c)}
+ const f=n=>body.getObjectByName(n);
+ f('face_cartoon').visible=!isScary;f('face_scary').visible=!!isScary;
+ const legL=f('legL'),legR=f('legR'),armL=f('armL'),armR=f('armR'),neck=f('neck');
+ if(tell==='tilt')neck.rotation.x=-1.25;
+ if(tell==='reacher'){armL.scale.y=armR.scale.y=2.3}
+ const ud=g.userData;ud.mats=mats;ud.tell=tell;ud.moving=false;
+ if(tell==='twin'){const t=makeFigure(role,null,isScary);t.rotation.z=1.4;t.position.set(.9,.3,.05);g.add(t)}
+ ud.tick=t=>{
+  if(ud.moving){const s=Math.sin(t*7)*.6;legL.rotation.x=s;legR.rotation.x=-s;armL.rotation.x=-s*.6;armR.rotation.x=s*.6}
+  else{legL.rotation.x=legR.rotation.x=0;armL.rotation.x=armR.rotation.x=0}
+  if(tell==='jitter'){[legL,legR,armL,armR].forEach(p=>{p.rotation.x=(Math.random()-.5)*1.6;p.rotation.z=(Math.random()-.5)*.8})}
+ };
+ return g}
+function setFigView(f,view){ // view: 'cam' or 'peep'
+ const u=f.userData;if(!u.mats)return;
+ const o=(u.tell==='hollow'&&view==='cam')?.28:1;u.mats.forEach(m=>m.opacity=o);
+ f.visible=!(u.tell==='absent'&&view==='cam')}
+
+/* ---------- game state ---------- */
+const NIGHT=330,WALK=16,TIMEOUT=30,MAXNIGHT=10,EV_TIMEOUT=25;
+const NQ=new URLSearchParams(location.search).get('night');
+const calcNight=()=>NQ?Math.max(1,Math.min(MAXNIGHT,+NQ||1)):Math.min(MAXNIGHT,(SAVE.nights||0)+1);
+let nightNo=calcNight();
+const LINE={courier:'Pizza delivery for room nine!',neighbor:'Hey, it is the neighbor. Can I borrow a phone charger?',worker:'Maintenance. Someone reported a leak in this room.',gamer:'Yo, I am in the room down the hall. My key card quit. Can you open up?',puffer:'Hey, it is freezing out here. Please let me in.',
+ catlady:'Hello dear. My cat ran into your hallway. May I come in and find her?',clerk:'Night clerk. I am doing a safety check on your room. Please open the door.',traveler:'I am so sorry. I am lost, and my phone died. Is this the lobby?',exterminator:'Pest control. Someone reported bugs in the ceiling of this room.'};
+const AT5=[20,80,140,200,255],AT6=[15,65,110,160,205,250];
+const mk=(a,at)=>a.map((x,i)=>({role:x[0],tell:x[1],at:at[i],line:LINE[x[0]],low:x[1]==='hush'}));
+const PLANS={
+ 1:mk([['courier',null],['neighbor','tilt'],['worker',null],['gamer','hollow'],['puffer','hush']],AT5),
+ 3:mk([['gamer',null],['worker','hollow'],['catlady',null],['courier','tilt'],['neighbor','reacher']],AT5),
+ 4:mk([['neighbor',null],['courier','hush'],['traveler',null],['puffer','twin'],['gamer','tilt']],AT5),
+ 5:mk([['worker',null],['gamer','hollow'],['traveler',null],['neighbor','jitter'],['puffer','hush']],AT5),
+ 6:mk([['puffer',null],['courier','reacher'],['neighbor','twin'],['clerk',null],['gamer','absent']],AT5),
+ 7:mk([['courier',null],['puffer','jitter'],['traveler',null],['worker','absent'],['neighbor','hollow']],AT5),
+ 8:mk([['exterminator',null],['worker','tilt'],['catlady',null],['courier','twin'],['gamer','jitter']],AT5),
+ 9:mk([['gamer','hollow'],['clerk',null],['neighbor','absent'],['exterminator',null],['puffer','reacher']],AT5),
+ 10:mk([['puffer','hush'],['traveler',null],['gamer','jitter'],['courier','twin'],['catlady',null],['gamer','absent']],AT6)};
+PLANS[2]=PLANS[1];
+const EVS={1:[],2:[[128,'window'],[232,'window']],3:[[100,'lights'],[235,'window']],4:[[95,'vent'],[180,'window'],[255,'lights']],
+ 5:[[80,'shade'],[170,'vent'],[255,'window']],6:[[70,'laptop'],[150,'shade'],[225,'lights']],7:[[90,'door'],[165,'laptop'],[235,'vent']],
+ 8:[[80,'crawl'],[150,'door'],[215,'window'],[275,'lights']],9:[[70,'crawl'],[125,'vent'],[185,'laptop'],[235,'shade'],[285,'door']],
+ 10:[[55,'window'],[105,'door'],[150,'lights'],[195,'vent'],[240,'shade'],[285,'crawl']]};
+const NTOAST={2:'Something may be at the window.',3:'The power may fail.',4:'Something may drip from the vent.',5:'A shadow may stand in the corner.',6:'The cameras may go dark.',7:'Something may pound on the door.',8:'Something may crawl on the ceiling.',9:'Anything can happen tonight.',10:'The last night. Everything comes at once.'};
+const RULE_EV={2:'6. If something scratches at the window, do not look at it. Close the curtains. Looking costs 15 sanity. Ignoring it costs 20.',
+ 3:'7. If the power dies, find the breaker box on the wall by the door and flip it. The cameras are dead until you do. Ignoring it costs 20.',
+ 4:'8. If something drips from the vent, climb on the bed and stay up until it leaves. Getting caught on the floor costs 20.',
+ 5:'9. If a shadow stands in the corner, switch on the flashlight and keep the beam on it. Do not let it reach you.',
+ 6:'10. If the cameras go dark, reboot the laptop. Stop the marker in the green zone three times.',
+ 7:'11. If something pounds on the door, hide under the bed until it leaves. Coming out early costs 15. Getting caught costs 25.',
+ 8:'12. If crawling sounds come from the ceiling, do not look up. Wait for them to leave. Looking up costs 15.',
+ 9:'13. Rules can change. Reread this card every night.',
+ 10:'14. Tonight, everything comes at once. Survive until dawn.'};
+const TELL_NIGHT={tilt:1,hollow:1,hush:1,reacher:3,twin:4,jitter:5,absent:6};
+const TELL_NAME={tilt:'a neck bent back (Tilt)',hollow:'a see-through body (Hollow)',hush:'a low wrong voice (Hush)',reacher:'arms too long (Reacher)',twin:'a second body slumped beside them (Twin)',jitter:'twitching limbs (Jitter)',absent:'shows on the peephole but not on the cameras (Absent)'};
+function buildRules(){const tl=Object.keys(TELL_NIGHT).filter(k=>TELL_NIGHT[k]<=nightNo).map(k=>TELL_NAME[k]);
+ $('rule3').textContent='3. Tonight, watch for: '+tl.join(', ')+'.';
+ let h='';for(let n=2;n<=nightNo;n++)if(RULE_EV[n])h+='<p>'+RULE_EV[n]+'</p>';$('rulesx').innerHTML=h}
+let G=null,view='room',started=false;
+function yAt(z){if(z<-17)return -1.6;if(z<-9)return -1.6+(Math.floor(z+17)+1)*.2;return 0}
+function toast(msg,ms=4800){const t=$('toast');t.textContent=msg;t.style.display='block';clearTimeout(toast.h);toast.h=setTimeout(()=>t.style.display='none',ms)}
+function clockStr(t){const m=Math.floor(23*60+t/NIGHT*420),h=Math.floor(m/60)%24,mm=m%60;
+ const ap=h>=12?'PM':'AM',h12=((h+11)%12)+1;return h12+':'+String(mm).padStart(2,'0')+' '+ap}
+function setSan(v){if(G.cat>0&&v<G.sanity-9){G.cat=0;inv();setTimeout(()=>toast('The cat hissed and the hit missed you. The cat is spent.',4200),80);return}if(v<G.sanity-9)hit();G.sanity=Math.max(0,Math.min(100,v));$('sanfill').style.width=G.sanity+'%';
+ $('sanfill').style.background=G.sanity>60?'#7fbf7f':G.sanity>30?'#d6b34a':'#c0453a';$('sanlabel').textContent='Sanity '+Math.round(G.sanity)}
+function newNight(){
+ if(G){G.active&&hall.remove(G.active.fig);G.guests.forEach(f=>room.remove(f));if(G.ev)endEvent()}
+ closeMini();nightNo=calcNight();buildRules();
+ const sk=+(new URLSearchParams(location.search).get('skip')||0),evs=(EVS[nightNo]||[]).map(([t,type])=>({t,type})),plan=PLANS[nightNo]||PLANS[1];
+ G={t:sk,sanity:100,plan,idx:plan.filter(q=>q.at<sk).length,active:null,guests:[],over:false,paused:false,evs,evIdx:evs.filter(q=>q.t<sk).length,ev:null,onBed:false,hide:false,flash:false,cat:0,spray:0,pills:0};setSan(100);{const gv=new URLSearchParams(location.search).get('give')||'';if(gv.includes('cat'))G.cat=1;if(gv.includes('spray'))G.spray=1;if(gv.includes('pills'))G.pills=2;if(gv.includes('key'))SAVE.key=1;if(gv.includes('guest')){const d=new THREE.Group();d.userData.tick=()=>{};G.guests.push(d)}}{const sv=+new URLSearchParams(location.search).get('san');if(sv){const c=G.cat;G.cat=0;setSan(sv);G.cat=c}}inv();$('doors').style.display='none';$('end').classList.remove('on');
+ $('bOpen').style.display=$('bKeep').style.display=$('bSleep').style.display=$('bCurt').style.display=$('bAct').style.display='none';$('cap').style.display='none';
+ FLASH.intensity=0;$('hideov').style.display='none';$('nosig').style.display='none';rcam.position.set(-.2,1.55,-1.3);yaw=0;pitch=+(new URLSearchParams(location.search).get('pitch')||0);applyLook();setView('room');setCurtains(false);
+ const gq=new URLSearchParams(location.search).get('guest');if(gq&&(ROLEFILES[gq]||ROLEX[gq]))guestIn(gq);
+ toast(nightNo>=2?'Night '+nightNo+'. Strangers at the door. '+NTOAST[nightNo]:'Night 1. Keep an eye on the doors, and the cameras.',5200)}
+
+/* ---------- room events ---------- */
+room.add(rcam);
+const FLASH=new THREE.SpotLight(0xfff2cc,0,14,.45,.5,1.2);FLASH.position.set(0,0,0);rcam.add(FLASH);FLASH.target.position.set(0,0,-1);rcam.add(FLASH.target);
+const BM=c=>new THREE.MeshBasicMaterial({color:c});
+function sph(c,sx,sy,sz,x,y,z){const m=new THREE.Mesh(new THREE.SphereGeometry(1,14,10),BM(c));m.scale.set(sx,sy,sz);m.position.set(x,y,z);return m}
+function makeBlob(sc){const g=new THREE.Group();g.add(sph(sc?0x151a16:0x6fd36f,.3,.2,.3,0,0,0));
+ [-1,1].forEach(q=>{g.add(sph(0xffffff,.07,.07,.05,q*.1,.07,.22));if(!sc)g.add(sph(0x111111,.03,.03,.03,q*.1,.07,.265))});return g}
+function makeShade(sc){const g=new THREE.Group(),c=sc?0x0b0b0e:0x4b3a8a;
+ const b=new THREE.Mesh(new THREE.CylinderGeometry(.2,.3,1.5,12),BM(c));b.position.y=.75;g.add(b);g.add(sph(c,.24,.28,.22,0,1.75,0));
+ [-1,1].forEach(q=>{g.add(sph(0xffffff,sc?.06:.07,sc?.03:.09,.04,q*.09,1.8,.18));if(!sc)g.add(sph(0x111111,.03,.04,.03,q*.09,1.8,.22))});
+ if(!sc)g.add(sph(0x221133,.07,.04,.03,0,1.68,.2));return g}
+function makePale(sc){const g=new THREE.Group(),c=sc?0xcfc9bb:0xcfe4ff,ey=sc?1.85:1.55;
+ const b=new THREE.Mesh(new THREE.CylinderGeometry(.2,.3,sc?1.5:1.3,12),BM(c));b.position.y=sc?.75:.65;g.add(b);g.add(sph(c,.24,sc?.32:.26,.22,0,sc?1.8:1.5,0));
+ [-1,1].forEach(q=>g.add(sph(0,.06,sc?.1:.08,.04,q*.09,ey,.19)));g.add(sph(0,sc?.07:.09,sc?.14:.05,.04,0,ey-.17,.19));
+ if(sc)[-1,1].forEach(q=>{const a=new THREE.Mesh(new THREE.CylinderGeometry(.05,.04,1.3,6),BM(c));a.position.set(q*.34,1,.1);a.rotation.z=q*.15;g.add(a)});return g}
+function makeBug(sc){const g=new THREE.Group(),c=sc?0x120e0e:0xf0a030;g.add(sph(c,.16,.07,.12,0,0,0));
+ for(let i=0;i<6;i++){const l=new THREE.Mesh(new THREE.CylinderGeometry(.012,.012,sc?.35:.2,4),BM(c)),a=i/6*Math.PI*2;l.position.set(Math.cos(a)*.17,-.01,Math.sin(a)*.14);l.rotation.z=Math.PI/2;l.rotation.y=-a;g.add(l)}
+ [-1,1].forEach(q=>g.add(sph(sc?0xff3030:0xffffff,.035,.035,.03,q*.06,-.06,.1)));return g}
+function facing(tx,tz,tol){if(view!=='room')return false;const want=Math.atan2(-(tx-rcam.position.x),-(tz-rcam.position.z));let d=Math.abs(yaw-want)%(Math.PI*2);if(d>Math.PI)d=Math.PI*2-d;return d<tol&&pitch>-.6&&pitch<.7}
+const rectDist=(x,z,x0,x1,z0,z1)=>Math.hypot(Math.max(x0-x,0,x-x1),Math.max(z0-z,0,z-z1));
+function setBed(on){G.onBed=on;if(on)G.bpre=[rcam.position.x,rcam.position.z];else if(G.bpre){rcam.position.x=G.bpre[0];rcam.position.z=G.bpre[1];G.bpre=null}if(G.ev&&G.ev.type==='vent')$('bAct').textContent=on?'Climb down':'Climb on bed'}
+function setHide(on){G.hide=on;$('hideov').style.display=on?'block':'none';if(on){G.pre=[rcam.position.x,rcam.position.z];rcam.position.x=1.25;rcam.position.z=-3.5}else if(G.pre){rcam.position.x=G.pre[0];rcam.position.z=G.pre[1];G.pre=null}if(G.ev&&G.ev.type==='door')$('bAct').textContent=on?'Come out':'Hide under bed'}
+function showAct(t){$('bAct').textContent=t;$('bAct').style.display='inline-block'}
+const mini={on:false,score:0,zone:[.4,.7],pos:0,dir:1};
+function newZone(){const w=.3-.05*mini.score,st=.08+Math.random()*(.84-w);mini.zone=[st,st+w];$('mzone').style.left=st*100+'%';$('mzone').style.width=w*100+'%'}
+function openMini(){mini.on=true;mini.score=0;mini.pos=0;mini.dir=1;newZone();$('mscore').textContent='Stop the marker inside the green zone. Three times.';$('mini').classList.add('on')}
+function closeMini(){mini.on=false;$('mini').classList.remove('on')}
+function miniStop(){if(!mini.on)return;if(!G||!G.ev||G.ev.type!=='laptop'){closeMini();return}
+ if(mini.pos>=mini.zone[0]&&mini.pos<=mini.zone[1]){mini.score++;pling();if(mini.score>=3){closeMini();evOk('Rebooted. The cameras are back.');return}$('mscore').textContent='Good. '+mini.score+' of 3.'}
+ else{mini.score=0;tone(120,.3,'sawtooth',.3);$('mscore').textContent='Missed. Back to zero. Try again.'}newZone()}
+const EV={
+ window:{die:'Your sanity ran out. The thing at the window saw you.',timeout:'You ignored the scratching. It got in your head. Sanity down 20.',
+  start(e){e.face=makeWatcher(scary);room.add(e.face);e.lastScratch=-99;e.lookT=0;e.looked=false;$('bCurt').style.display=$('bEsc').style.display='inline-block';
+   toast(scary?'Scratch, scratch. Something is at the window. Do not look. Close the curtains!':'Tap, tap. Someone is at the window. Do not look. Close the curtains!',5200)},
+  tick(e,dt){e.face.position.y=1.55+Math.sin(tAbs*3)*.04;e.face.position.x=Math.sin(tAbs*1.3)*.12;
+   if(G.t-e.lastScratch>1.8){e.lastScratch=G.t;scratch()}
+   if(!e.looked&&facing(0,-5.9,.55)){e.lookT+=dt;if(e.lookT>.7){e.looked=true;setSan(G.sanity-15);toast('You looked. It looked back. Sanity down 15.',4200);if(scary)scareFlash();else boing();if(G.sanity<=0)finish(false,EV.window.die)}}},
+  end(e){room.remove(e.face);setCurtains(false)}},
+ lights:{die:'Your sanity ran out in the dark.',timeout:'You sat in the dark too long. Sanity down 20.',
+  start(e){rAmb.intensity=scary?.07:.16;rLights.forEach(l=>l.intensity=0);
+   e.led=new THREE.Mesh(new THREE.SphereGeometry(.06,10,8),BM(0xff2a2a));e.led.position.set(1.9,1.5,-.14);room.add(e.led);
+   $('nosig').innerHTML='NO SIGNAL<br>The power is out';$('nosig').style.display='flex';showAct('Flip breaker');
+   tone(90,.8,'sawtooth',.4,-50);toast('The power went out. Find the breaker box by the door and flip it. Follow the red light.',6200)},
+  tick(e,dt){e.led.scale.setScalar(1+.4*Math.sin(tAbs*8))},
+  act(e){if(Math.hypot(rcam.position.x-1.9,rcam.position.z+.1)<1.5)evOk('Power is back.');else toast('Too far. The breaker box is on the wall by the door, on the right. Follow the red light.',3600)},
+  end(e){room.remove(e.led);$('nosig').style.display='none';applyLook()}},
+ vent:{die:'Your sanity ran out. Something slimy got you.',to:Infinity,
+  start(e){e.blob=makeBlob(scary);e.blob.position.set(0,2.5,-2.7);room.add(e.blob);showAct('Climb on bed');tone(520,.12,'sine',.25,-300);
+   toast(scary?'Something is dripping from the vent. Get on the bed!':'Plop! Something silly fell out of the vent. Get on the bed!',5200)},
+  tick(e,dt){const age=G.t-e.start,b=e.blob;
+   if(age<1.5){const k=age/1.5;b.position.y=2.5-2.3*k*k}
+   else{b.position.y=.2+Math.abs(Math.sin(age*6))*.08;if(age>5.5){const tx=G.onBed?-.3+Math.cos(age*1.1)*1.2:rcam.position.x,tz=G.onBed?-3.3+Math.sin(age*1.1)*1.0:rcam.position.z;
+    const dx=tx-b.position.x,dz=tz-b.position.z,d=Math.hypot(dx,dz);b.rotation.y=Math.atan2(dx,dz);if(d>.05){const st=Math.min(d,1*dt);b.position.x+=dx/d*st;b.position.z+=dz/d*st}
+    if(!G.onBed&&d<.6){evFail(20,'It got you on the floor. Sanity down 20.',true);return}}}
+   if(age>19)evOk('It slithered away. The coast is clear.')},
+  act(e){if(G.onBed){setBed(false);return}if(rectDist(rcam.position.x,rcam.position.z,.3,2.25,-4.4,-2.6)<1.1){setBed(true);pling()}else toast('Too far. Get next to the bed first.',3000)},
+  end(e){room.remove(e.blob);if(G.onBed)setBed(false)}},
+ shade:{die:'Your sanity ran out. The shadow reached you.',to:Infinity,
+  start(e){e.fig=makeShade(scary);e.fig.position.set(1.9,0,-5.6);room.add(e.fig);e.a=.4;showAct('Flashlight: '+(G.flash?'ON':'OFF'));
+   toast('Something is standing in the back corner. Turn on the flashlight and keep the beam on it.',6200)},
+  tick(e,dt){const q=e.fig,px=rcam.position.x,pz=rcam.position.z;q.position.set(1.9+(px-1.9)*e.a*.9,0,-5.6+(pz+5.6)*e.a*.9);q.rotation.y=Math.atan2(px-q.position.x,pz-q.position.z);
+   const lit=G.flash&&facing(q.position.x,q.position.z,.38);e.a+=(lit?-.16:.065)*dt;
+   if(e.a>=1)evFail(20,'The shadow reached you. Sanity down 20.',true);else if(e.a<=0)evOk('The light drove it away.')},
+  act(e){G.flash=!G.flash;FLASH.intensity=G.flash?14:0;$('bAct').textContent='Flashlight: '+(G.flash?'ON':'OFF')},
+  end(e){room.remove(e.fig);G.flash=false;FLASH.intensity=0}},
+ laptop:{die:'Your sanity ran out. The laptop never came back.',to:40,timeout:'The laptop stayed locked. Sanity down 20.',
+  start(e){$('nosig').innerHTML='NO SIGNAL<br>Laptop locked. Press Reboot laptop';$('nosig').style.display='flex';showAct('Reboot laptop');
+   toast('The cameras went dark. Reboot the laptop!',5200)},
+  tick(e,dt){},
+  act(e){openMini()},
+  end(e){$('nosig').style.display='none';closeMini()}},
+ door:{die:'Your sanity ran out. The pale thing found you.',to:Infinity,
+  start(e){e.fig=makePale(scary);e.fig.position.set(-1.3,0,-.45);e.fig.visible=false;room.add(e.fig);e.pound=-99;showAct('Hide under bed');
+   toast('Something is pounding on the door. Hide under the bed!',5200)},
+  tick(e,dt){const age=G.t-e.start;
+   if(age<9){if(scary&&age>7.4&&!e.hushed){e.hushed=true;hush(1.8)}const gap=scary?Math.max(.32,.9-age*.07):.9;if(G.t-e.pound>gap&&(!scary||age<7.4)){e.pound=G.t;const pv=.5+.05*age;tone(70,.22,'sine',pv);nz('lowpass',300,.12,pv*.6);setTimeout(()=>{tone(70,.22,'sine',pv);nz('lowpass',300,.12,pv*.6)},160)}}
+   else if(age<18){
+    if(!e.entered){e.entered=true;e.fig.visible=true;if(scary)stinger();else boing();
+     if(!G.hide){evFail(25,'It smashed through the door and found you. Sanity down 25.',true);return}toast('It broke in. Stay hidden.',3600)}
+    if(!G.hide){evFail(15,'You came out too early. Sanity down 15.',true);return}
+    const k=(age-9)/9;e.fig.position.set(-1.3+Math.sin(k*7)*1.1,0,-.45-Math.sin(k*Math.PI)*4.8);e.fig.rotation.y=Math.PI*(k<.5?1:0)}
+   else evOk('It left. You can come out now.')},
+  act(e){if(G.hide){setHide(false);return}if(rectDist(rcam.position.x,rcam.position.z,.3,2.25,-4.4,-2.6)<1.6){setHide(true);pling()}else toast('Too far. Get next to the bed first.',3000)},
+  end(e){room.remove(e.fig);if(G.hide)setHide(false)}},
+ crawl:{die:'Your sanity ran out. The crawling never stopped.',to:Infinity,
+  start(e){e.bugs=[];for(let i=0;i<6;i++){const b=makeBug(scary);b.userData.c=[-1.4+i*.55,-1.6-(i%3)*1.2,.6+Math.random()*.6];b.position.y=2.52;room.add(b);e.bugs.push(b)}
+   e.lookT=0;e.looked=false;e.sk=-99;toast('Something is crawling on the ceiling. Do not look up. Wait for it to leave.',6200)},
+  tick(e,dt){const age=G.t-e.start;e.bugs.forEach((b,i)=>{const c=b.userData.c;b.position.x=c[0]+Math.sin(age*c[2]+i)*.9;b.position.z=c[1]+Math.cos(age*c[2]*.8+i)*.8;b.rotation.y=age*c[2]});
+   if(G.t-e.sk>.9){e.sk=G.t;tone(1800+Math.random()*1500,.04,'square',scary?.1:.04)}
+   if(!e.looked&&pitch>.8&&view==='room'){e.lookT+=dt;if(e.lookT>.6){e.looked=true;setSan(G.sanity-15);toast('You looked up. They saw you. Sanity down 15.',4200);if(scary)scareFlash();else boing();if(G.sanity<=0)finish(false,EV.crawl.die)}}
+   if(age>22)evOk(e.looked?'They are gone.':'They are gone. You kept your cool.')},
+  end(e){e.bugs.forEach(b=>room.remove(b))}}};
+function startEvent(type){const e={type,start:G.t};G.ev=e;EV[type].start(e);sndEv(type,true);inv()}
+function endEvent(){const e=G.ev;if(!e)return;EV[e.type].end(e);sndEv(e.type,false);G.ev=null;$('bCurt').style.display=$('bAct').style.display=$('bEsc').style.display='none';inv()}
+function evFail(pen,msg,flash){const die=EV[G.ev.type].die;endEvent();setSan(G.sanity-pen);toast(msg,5200);if(flash){if(scary)scareFlash();else boing()}if(G.sanity<=0)finish(false,die)}
+function evOk(msg){endEvent();pling();toast(msg,5200)}
+function closeCurtains(){const e=G.ev;if(!e||e.type!=='window')return;nz('bandpass',700,.35,.25,2200,.8);const m=e.looked?'Curtains closed. Too late, you already looked.':'Good. Curtains closed before you looked.';
+ endEvent();setCurtains(true);pling();toast(m,5200);setTimeout(()=>{if(!G.ev)setCurtains(false)},12000)}
+function setView(v){view=v;$('walk').style.display=(v==='room'&&started)?'grid':'none';$('lap').classList.toggle('on',v==='lap');$('peepmask').style.display=v==='peep'?'block':'none'}
+function applyLook(){
+ rAmb.intensity=scary?.45:.95;rLights.forEach((l,i)=>l.intensity=scary?base[i]:base[i]*1.7);
+ $('vig').style.background=scary?'radial-gradient(ellipse at center,transparent 35%,#000d 100%)':'radial-gradient(ellipse at center,transparent 70%,#0006 100%)';
+ const tx='Scary Mode: '+(scary?'ON':'OFF');['scaryTitle','scaryPause'].forEach(i=>{$(i).textContent=tx;$(i).classList.toggle('on',scary)});
+ }
+function flipScary(){scary=!scary;SAVE.scary=scary;persist();applyLook();toast(scary?'Scary Mode on. It starts with the next visitor.':'Scary Mode off. Silly and calm from the next visitor.',3200)}
+function spawn(p){
+ const ft=new URLSearchParams(location.search).get('tell');if(ft)p.tell=ft==='none'?null:ft;
+ const fig=makeFigure(p.role,p.tell,scary);fig.position.set(0,-1.6,-26);hall.add(fig);
+ G.active={p,fig,start:G.t,state:'walk',lastKnock:-99,spoke:false};}
+function guestIn(role){
+ const slots=[[-1.2,0,-4.6],[.3,0,-5.1],[-.4,0,-3.9]];const f=makeFigure(role,null,scary);
+ const s=slots[Math.min(G.guests.length,2)];f.position.set(...s);f.rotation.y=Math.atan2(rcam.position.x-s[0],rcam.position.z-s[2]);room.add(f);G.guests.push(f)}
+function scareFlash(){
+ const c=$('scarec').getContext('2d');c.fillStyle='#200';c.fillRect(0,0,480,480);c.fillStyle='#d9d2c4';
+ c.beginPath();c.ellipse(240,250,150,200,0,0,7);c.fill();c.fillStyle='#000';
+ c.beginPath();c.ellipse(185,210,38,55,.1,0,7);c.fill();c.beginPath();c.ellipse(295,210,38,55,-.1,0,7);c.fill();
+ c.beginPath();c.ellipse(240,340,45,80,0,0,7);c.fill();
+ $('scare').classList.add('on');stinger();setTimeout(()=>$('scare').classList.remove('on'),520)}
+function endVisitor(){const a=G.active;hall.remove(a.fig);G.active=null;$('bOpen').style.display=$('bKeep').style.display='none';$('cap').style.display='none';
+ stopVoice()}
+const GIFT={catlady:()=>{G.cat=1;return ' The cat will block the next big hit.'},
+ clerk:()=>{SAVE.key=1;persist();return ' The clerk slid you a master key and whispered: the way out is the staff door, the red one.'},
+ traveler:()=>{G.pills+=2;return ' The traveler left you two sanity pills.'},
+ exterminator:()=>{G.spray=1;return ' The exterminator left you a can of bug spray for the ceiling.'}};
+function inv(){if(!G)return;const a=[];if(G.cat)a.push('Cat');if(G.spray)a.push('Bug spray');if(G.pills)a.push('Pills x'+G.pills);if(SAVE.key)a.push('Master key');
+ $('inv').textContent=a.length?'Carrying: '+a.join(', '):'';$('bPill').style.display=G.pills>0&&!G.over?'inline-block':'none';$('bSpray').style.display=G.spray>0&&G.ev&&G.ev.type==='crawl'&&!G.over?'inline-block':'none'}
+function ending(key,title,text){G.over=true;$('bOpen').style.display=$('bKeep').style.display=$('bSleep').style.display=$('bPill').style.display=$('bSpray').style.display='none';
+ if(G.active)endVisitor();if(G.ev)endEvent();SAVE.endings=[...new Set([...(SAVE.endings||[]),key])];persist();
+ $('endh').textContent=title;$('endp').textContent=text+' Endings found: '+SAVE.endings.length+' of 4.';$('doors').style.display='none';$('end').classList.add('on');tbestUpdate()}
+function tbestUpdate(){const a=[];if(SAVE.nights)a.push('Nights survived: '+SAVE.nights);if(SAVE.endings&&SAVE.endings.length)a.push('Endings found: '+SAVE.endings.length+' of 4');$('tbest').textContent=a.join('  |  ')}
+function bathFlash(){const c=$('scarec').getContext('2d');c.fillStyle=scary?'#110':'#9fd6ff';c.fillRect(0,0,480,480);
+ if(scary){c.fillStyle='#d9c9a0';c.fillRect(150,50,180,420);c.fillStyle='#000';c.beginPath();c.ellipse(240,150,26,38,0,0,7);c.fill();c.fillRect(224,180,32,170);
+  c.lineWidth=7;c.strokeStyle='#000';c.beginPath();c.moveTo(224,190);c.lineTo(165,460);c.moveTo(256,190);c.lineTo(315,460);c.stroke();c.fillStyle='#fff';c.fillRect(228,142,8,5);c.fillRect(246,142,8,5);stinger()}
+ else{c.fillStyle='#ffd93b';c.beginPath();c.ellipse(240,300,150,110,0,0,7);c.fill();c.beginPath();c.arc(330,190,70,0,7);c.fill();c.fillStyle='#ff8c1a';c.beginPath();c.moveTo(385,185);c.lineTo(450,200);c.lineTo(385,215);c.fill();c.fillStyle='#000';c.beginPath();c.arc(345,172,9,0,7);c.fill();boing()}
+ $('scare').classList.add('on')}
+function bathroom(){G.over=true;$('bOpen').style.display=$('bKeep').style.display=$('bSleep').style.display=$('bPill').style.display=$('bSpray').style.display='none';if(G.active)endVisitor();if(G.ev)endEvent();
+ toast(scary?'A door creaks. The bathroom door is opening...':'Squeak. The bathroom door is opening...',2400);if(scary){hush(2.2);setTimeout(()=>creak(1.3,.12),300)}else creak(.5,.06);
+ setTimeout(()=>{bathFlash();setTimeout(()=>{$('scare').classList.remove('on');finish(false,'You slept alone. '+(scary?'Something came out of the bathroom.':'A giant rubber duck waddled out of the bathroom and sat on you.'))},900)},2000)}
+function resolve(choice){
+ const a=G.active;if(!a||a.state!=='knock')return;const p=a.p,real=!p.tell;let msg='';
+ if(choice==='open')creak(.7,.08);else bolt();
+ if(choice==='open'){
+  if(real){guestIn(p.role);if(p.role==='courier'){setSan(G.sanity+20);msg='A real pizza courier. Free pizza, sanity up.'}else msg='A real person. They will stay in the room with you.'+(GIFT[p.role]?GIFT[p.role]():'');pling();inv()}
+  else{setSan(G.sanity-25);msg='Wrong. '+TELLS[p.tell]+' Sanity down 25.';if(scary)scareFlash();else boing()}
+ }else{
+  if(real){setSan(G.sanity-10);msg='That was a real '+p.role+'. They left upset. Sanity down 10.'}
+  else msg='Good. '+TELLS[p.tell]}
+ toast(msg,6200);endVisitor();
+ if(G.sanity<=0)finish(false,'Your sanity ran out. Something else answered the door.')}
+function finish(win,txt){G.over=true;finishSound(win);$('bOpen').style.display=$('bKeep').style.display=$('bSleep').style.display='none';
+ if(G.active)endVisitor();
+ if(G.ev)endEvent();
+ if(win&&nightNo>=MAXNIGHT&&SAVE.key){SAVE.nights=Math.max(SAVE.nights||0,nightNo);persist();$('endh').textContent='Dawn. Two ways out.';$('endp').textContent='The front desk is dark. The clerk said the way out is the staff door, the red one. Pick a door, or wait for the day shift.';$('doors').style.display='block';tbestUpdate()}
+ else if(win){if(nightNo>=MAXNIGHT){SAVE.endings=[...new Set([...(SAVE.endings||[]),'dawn'])];persist()}SAVE.nights=Math.max(SAVE.nights||0,nightNo);persist();$('endh').textContent=nightNo>=MAXNIGHT?'Dawn. You survived Lockdown Inn.':'Dawn. Night '+nightNo+' survived.';$('endp').textContent=txt+(nightNo<MAXNIGHT?' Next up: Night '+(nightNo+1)+'.':' All ten nights done. The Dawn ending.');tbestUpdate()}
+ else{$('endh').textContent='Night '+nightNo+' failed.';$('endp').textContent=txt}
+ $('end').classList.add('on')}
+function endNight(){
+ if(G.guests.length>0){setSan(G.sanity+30);finish(true,'You slept with a real person in the room. Sanity '+Math.round(G.sanity)+'.')}
+ else bathroom()}
+
+/* ---------- loop ---------- */
+const SLOW=+(new URLSearchParams(location.search).get('slow')||1);
+let last=performance.now(),tAbs=0;
+function frame(now){
+ const dt=Math.min((now-last)/1000,.05);last=now;tAbs+=dt;
+ if(started&&G&&!G.over&&!G.paused){
+  G.t+=dt*SLOW;$('clock').textContent=clockStr(G.t);
+  if(!G.active&&G.idx<G.plan.length&&G.t>=G.plan[G.idx].at)spawn(G.plan[G.idx++]);
+  if(!G.ev&&G.evIdx<G.evs.length&&G.t>=G.evs[G.evIdx].t){startEvent(G.evs[G.evIdx++].type)}
+  const ev=G.ev;
+  if(ev){const cfg=EV[ev.type];cfg.tick(ev,dt*SLOW);if(G.ev===ev&&!G.over&&G.t-ev.start>(cfg.to||EV_TIMEOUT))evFail(20,cfg.timeout);if(G.ev===ev)evSound(ev)}
+  const a=G.active;
+  if(a){const age=G.t-a.start;
+   if(age<WALK){const z=-26+24.5*(age/WALK);a.fig.position.set(0,yAt(z)+Math.abs(Math.sin(tAbs*7))*.03,z);a.fig.userData.moving=true;if(age<WALK-.8&&tAbs-SND.stepT>(scary?.62:.5)){SND.stepT=tAbs;step((.04+.32*Math.pow(age/WALK,1.6))*(view==='peep'?1.5:1)*(scary?1:.7))}if(scary&&age>WALK-1.4&&!a.hushed){a.hushed=true;hush(1.7)}}
+   else{a.fig.position.set(0,0,-1.5);a.fig.userData.moving=false;
+    if(a.state==='walk'){a.state='knock';a.knockStart=G.t;$('bOpen').style.display=$('bKeep').style.display='inline-block';
+     $('cap').textContent='"'+a.p.line+'"';$('cap').style.display='block'}
+    if(G.t-a.lastKnock>3.6){a.lastKnock=G.t;knock();if(!a.spoke||G.t-a.knockStart>12&&!a.spoke2){if(a.spoke)a.spoke2=true;a.spoke=true;say(a.p.line,a.p.low,a.p.role)}}
+    if(G.t-a.knockStart>TIMEOUT){if(!a.p.tell){setSan(G.sanity-10);toast('They gave up and left. That was a real person. Sanity down 10.',5000)}else toast('They gave up and left.',3500);endVisitor();if(G.sanity<=0)finish(false,'Your sanity ran out.')}}
+   if(G.active)a.fig.userData.tick(tAbs)}
+  const showSleep=!G.active&&!G.ev&&G.idx>=G.plan.length&&G.t>G.plan[G.plan.length-1].at+60;$('bSleep').style.display=showSleep?'inline-block':'none';
+  if(G.t>=NIGHT)endNight();
+  if(scary&&!(G.ev&&G.ev.type==='lights')){const fk=Math.random()<.015;if(fk)buzzDip();rLights[0].intensity=base[0]*(fk?.2:1);hl1.intensity=Math.random()<.02?1:6}
+ }
+ G&&G.guests.forEach(f=>f.userData.tick(tAbs));
+ if(mini.on){mini.pos+=mini.dir*dt*(.7+.3*mini.score);if(mini.pos>=1){mini.pos=1;mini.dir=-1}if(mini.pos<=0){mini.pos=0;mini.dir=1}$('mmark').style.left=(mini.pos*100)+'%'}
+ if(AC){const wp=!!(G&&G.paused);if(wp&&AC.state==='running')AC.suspend();else if(!wp&&AC.state==='suspended'&&started)AC.resume()}
+ sndTick();
+ r.setScissorTest(false);r.setViewport(0,0,innerWidth,innerHeight);r.clear();
+ if(view==='room'){
+  const hid=!!(G&&G.hide),f=hid?0:(keys.KeyW||keys.ArrowUp?1:0)-(keys.KeyS||keys.ArrowDown?1:0)+hold.f,sd=hid?0:(keys.KeyD||keys.ArrowRight?1:0)-(keys.KeyA||keys.ArrowLeft?1:0)+hold.s,sp=1.8*dt;
+  rcam.position.x+=(-Math.sin(yaw)*f+Math.cos(yaw)*sd)*sp;rcam.position.z+=(-Math.cos(yaw)*f-Math.sin(yaw)*sd)*sp;
+  rcam.position.x=Math.max(-2.1,Math.min(2.1,rcam.position.x));rcam.position.z=Math.max(-5.8,Math.min(-0.2,rcam.position.z));
+  if(!(G&&(G.onBed||G.hide))){const cp=rcam.position;if(cp.x>1.5&&cp.z<-.85&&cp.z>-1.85){const pz=Math.min(cp.z+1.85,-.85-cp.z);if(pz<cp.x-1.5){cp.z=cp.z>-1.35?-.85:-1.85}else cp.x=1.5}}
+  if(G&&G.onBed){rcam.position.x=Math.max(.5,Math.min(2.05,rcam.position.x));rcam.position.z=Math.max(-4.2,Math.min(-2.8,rcam.position.z))}
+  const ty=G&&G.onBed?2.05:hid?.35:1.55;rcam.position.y+=(ty-rcam.position.y)*Math.min(1,dt*8);
+  rcam.rotation.set(pitch,yaw,0,'YXZ');r.render(room,rcam)}
+ else if(view==='peep'){if(G&&G.active)setFigView(G.active.fig,'peep');peep.aspect=innerWidth/innerHeight;peep.updateProjectionMatrix();r.render(hall,peep)}
+ else if(view==='lap'){if(G&&G.active)setFigView(G.active.fig,'cam');
+  cams.forEach((c,i)=>{const b=$('f'+i).getBoundingClientRect();const w=b.width,h=b.height,x=b.left,y=innerHeight-b.bottom;
+   c.aspect=w/h;c.updateProjectionMatrix();r.setViewport(x,y,w,h);r.setScissor(x,y,w,h);r.setScissorTest(true);r.clear();r.render(hall,c)});r.setScissorTest(false)}
+ requestAnimationFrame(frame)}
+requestAnimationFrame(frame);
+
+/* ---------- ui ---------- */
+$('startbtn').disabled=true;$('startbtn').textContent='Loading people...';peopleReady.then(()=>{$('startbtn').disabled=false;$('startbtn').textContent='Start Night '+nightNo});
+buildRules();
+$('bCurt').onclick=closeCurtains;
+$('bEsc').onclick=()=>{if(G&&!G.over&&G.ev&&G.ev.type==='window'){shatter();ending('window','Ending: Broken Window',scary?'You smashed the glass and climbed out into the cold. The thing was waiting on the ledge, smiling. It had been patient all night.':'You hopped out the window and slid down a laundry chute into a pile of warm towels. You are free, and a little fluffy.')}};
+$('bPill').onclick=()=>{if(G&&!G.over&&G.pills>0){G.pills--;setSan(G.sanity+25);pling();inv();toast('You took a pill. Sanity up.',2500)}};
+$('bSpray').onclick=()=>{if(G&&!G.over&&G.spray>0&&G.ev&&G.ev.type==='crawl'){G.spray=0;evOk('Pssht. The bugs dropped off the ceiling and curled up. The spray is used.')}};
+$('bDoorA').onclick=()=>{creak(1.2,.1);birds();ending('key','Ending: The Key',scary?'The red door opened onto the loading dock and gray morning light. You walked out with the clerk\'s key in your hand and never looked back.':'The red door opened onto a bouncy castle in the parking lot. Morning! You bounced all the way home.')};
+$('bDoorB').onclick=()=>{creak(1.2,.1);tone(60,2,'sine',.4,-20);ending('wrong','Ending: The Wrong Door',scary?'The plain door opened onto a hallway that looked just like the one you left. The numbers on the doors kept counting down. Room 9 was waiting at the end.':'The plain door opened onto the hotel laundry room. Thirty socks stared at you. You are lost in warm socks forever.')};
+$('bDoorC').onclick=()=>{birds();SAVE.endings=[...new Set([...(SAVE.endings||[]),'dawn'])];persist();$('doors').style.display='none';$('endh').textContent='Dawn. You survived Lockdown Inn.';$('endp').textContent='You waited for the day shift. All ten nights done. The Dawn ending. Endings found: '+SAVE.endings.length+' of 4.';tbestUpdate()};$('bAct').onclick=()=>{const e=G&&G.ev;if(e&&EV[e.type].act)EV[e.type].act(e)};$('mstop').onclick=miniStop;$('mquit').onclick=closeMini;
+$('startbtn').onclick=()=>{ac();started=true;$('title').classList.remove('on');$('hud').style.display='flex';$('bar').style.display='flex';newNight()};
+$('sndPause').textContent='Sound: '+(SAVE.mute?'OFF':'ON');$('sndPause').onclick=flipSound;addEventListener('keydown',e=>{if(e.code==='KeyM'&&started)flipSound()});
+$('scaryTitle').onclick=flipScary;$('scaryPause').onclick=flipScary;
+$('rulesTitle').onclick=()=>{$('rules').dataset.from='title';$('rules').classList.add('on')};
+$('rulesPause').onclick=()=>{$('rules').classList.add('on')};
+$('rulesClose').onclick=()=>$('rules').classList.remove('on');
+$('pausebtn').onclick=()=>{if(!G||G.over)return;G.paused=true;$('pause').classList.add('on')};
+$('resume').onclick=()=>{G.paused=false;$('pause').classList.remove('on')};
+$('restart').onclick=()=>{$('pause').classList.remove('on');newNight()};
+$('again').onclick=()=>newNight();
+$('bRoom').onclick=()=>setView('room');$('bPeep').onclick=()=>setView('peep');$('bLap').onclick=()=>setView('lap');
+$('bOpen').onclick=()=>resolve('open');$('bKeep').onclick=()=>resolve('keep');$('bSleep').onclick=()=>{if(G&&!G.over)endNight()};
+tbestUpdate();
+const keys={},hold={f:0,s:0};
+addEventListener('keydown',e=>keys[e.code]=true);addEventListener('keyup',e=>keys[e.code]=false);
+document.querySelectorAll('[data-m]').forEach(b=>{const [a,v]=b.dataset.m.split(',');const on=e=>{e.preventDefault();hold[a]=+v},off=()=>hold[a]=0;
+ b.addEventListener('pointerdown',on);b.addEventListener('pointerup',off);b.addEventListener('pointerleave',off)});
+let drag=false,lx=0,ly=0;
+r.domElement.addEventListener('pointerdown',e=>{drag=true;lx=e.clientX;ly=e.clientY});
+addEventListener('pointerup',()=>drag=false);
+addEventListener('pointermove',e=>{if(!drag||view!=='room')return;yaw-=(e.clientX-lx)*.005;pitch=Math.max(-1.1,Math.min(1.1,pitch-(e.clientY-ly)*.005));lx=e.clientX;ly=e.clientY});
+addEventListener('resize',()=>{r.setSize(innerWidth,innerHeight);rcam.aspect=innerWidth/innerHeight;rcam.updateProjectionMatrix()});
+applyLook();
+window.__game={get G(){return G},resolve,setView,spawn,startEvent,closeCurtains,EV};
+</script><script>if('serviceWorker' in navigator)addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))</script>
+</body></html>
